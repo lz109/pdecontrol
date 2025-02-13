@@ -85,13 +85,13 @@ env = gym.make("PDEControlGym-ReactionDiffusionPDE1D", **parabolicParameters)
 
 # Save a checkpoint every 1000 steps
 checkpoint_callback = CheckpointCallback(
-  save_freq=1000,
+  save_freq=10000,
   save_path="./logsSAC",
   name_prefix="rl_model",
   save_replay_buffer=True,
   save_vecnormalize=True,
 )
 
-model = SAC("MlpPolicy",env, verbose=1, tensorboard_log="./tb/")
+model = SAC("MlpPolicy",env, verbose=1, tensorboard_log="./tb/", device="cpu")
 # Train for 1 Million timesteps
-model.learn(total_timesteps=1e5, callback=checkpoint_callback)
+model.learn(total_timesteps=5e5, callback=checkpoint_callback)

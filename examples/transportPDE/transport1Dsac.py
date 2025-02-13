@@ -87,6 +87,6 @@ checkpoint_callback = CheckpointCallback(
   save_vecnormalize=True,
 )
 
-model = SAC("MlpPolicy",env, verbose=1, tensorboard_log="./tb/")
+model = SAC("MlpPolicy",env, verbose=1, tensorboard_log="./tb/", device="cpu")
 # Train for 1 Million timesteps
-model.learn(total_timesteps=1e6, callback=checkpoint_callback)
+model.learn(total_timesteps=1e5, callback=checkpoint_callback)

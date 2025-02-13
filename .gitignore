@@ -2,3 +2,7 @@
 *~
 *.swp
 *.swo
+examples/reactionDiffusionPDE/logsPPO/
+examples/reactionDiffusionPDE/logsSAC/
+examples/NavierStokes/logsSAC/
+examples/NavierStokes/logsPPO/

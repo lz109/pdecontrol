@@ -72,8 +72,9 @@ for experiment_i in range(1):
     s = time.time()
     for t in tqdm(range(T)):
         obs, reward, done, _ , _ = env.step(np.random.uniform(2,4)) 
-        U.append(env.u)
-        V.append(env.v)
+        U.append(env.unwrapped.u)
+        V.append(env.unwrapped.v)
+
         total_reward += reward
     print("Total Reward:", total_reward)
     u_target = np.load('target.npz')['u']
@@ -94,7 +95,8 @@ for experiment_i in range(1):
             lam1 = lam1 - dt * dlam1dt
             lam2 = lam2 - dt * dlam2dt
             lam1, lam2 = apply_boundary(lam1, lam2)
-            pressure = env.solve_pressure(lam1, lam2, pressure)
+            pressure = env.unwrapped.solve_pressure(lam1, lam2, pressure)  
+
             lam1 = lam1 - dt * central_difference(pressure, "x", dx)
             lam2 = lam2 - dt * central_difference(pressure, "y", dy)
             lam1, lam2 = apply_boundary(lam1, lam2)
@@ -110,10 +112,74 @@ for experiment_i in range(1):
         total_reward = 0.
         for t in tqdm(range(T)):
             obs, reward, done, _ , _ = env.step(actions[t])
-            U.append(env.u)
-            V.append(env.v)
+            U.append(env.unwrapped.u)
+            V.append(env.unwrapped.v)
+
             total_reward += reward
         plt.plot(actions)
-        plt.show()
-        np.savez('result/NS_optmization.npz', U=env.U[:,:,:,0], V=env.U[:,:,:,1], desired_U=np.array(u_target), desired_V=np.array(v_target), actions=actions)
-        
+        plt.savefig("NSopti.png", dpi=300)
+        np.savez('NS_optmization.npz', U=env.unwrapped.U[:,:,:,0], V=env.unwrapped.U[:,:,:,1], desired_U=np.array(u_target), desired_V=np.array(v_target), actions=actions)
+
+# Load reference velocity fields
+u_target = np.load('target.npz')['u']
+v_target = np.load('target.npz')['v']
+reference_data = [(u_target[0], v_target[0]), (u_target[-1], v_target[-1])]  # t=0 and t=0.2
+
+# Create environment
+env = gym.make("PDEControlGym-NavierStokes2D", **NS2DParameters)
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load saved optimization results
+data = np.load('NS_optmization.npz')
+
+U = data['U']  
+V = data['V']  
+desired_U = data['desired_U']  
+desired_V = data['desired_V']  
+actions = data['actions'] 
+
+timesteps = [1, 199]  # First and last time step
+
+# Create figure for velocity field comparison
+fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharex=True, sharey=True)
+
+X, Y = U.shape[1], U.shape[2]  
+x, y = np.meshgrid(np.linspace(0, 1, X), np.linspace(0, 1, Y), indexing="ij")
+
+for i, t in enumerate(timesteps):
+    # Get actual velocity fields
+    u_actual = U[t]
+    v_actual = V[t]
+    
+    # Get reference velocity fields
+    u_ref = desired_U[t]
+    v_ref = desired_V[t]
+    
+    # Compute velocity magnitudes
+    speed_actual = np.sqrt(u_actual**2 + v_actual**2)
+    speed_ref = np.sqrt(u_ref**2 + v_ref**2)
+
+    # Plot actual velocity field (left column)
+    ax = axes[i, 0]
+    ax.contourf(x, y, speed_actual, cmap="Blues")  # Background: velocity magnitude
+    ax.quiver(x, y, u_actual, v_actual, color="red", alpha=0.8, scale=20, label="Actual")  # Red arrows
+    ax.set_title(f"Actual Velocity at t={t}")
+    
+    # Plot reference velocity field (right column)
+    ax = axes[i, 1]
+    ax.contourf(x, y, speed_ref, cmap="Blues")  # Background: velocity magnitude
+    ax.quiver(x, y, u_ref, v_ref, color="black", alpha=0.8, scale=20, label="Reference")  # Black arrows
+    ax.set_title(f"Reference Velocity at t={t}")
+
+# Set shared axis labels
+for ax in axes[:, 0]:
+    ax.set_ylabel("Y-axis")
+for ax in axes[1, :]:
+    ax.set_xlabel("X-axis")
+
+# Adjust layout and show plot
+plt.tight_layout()
+plt.savefig("velocity_field_comparison.png", dpi=300)
+

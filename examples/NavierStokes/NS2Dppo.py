@@ -12,7 +12,7 @@ from stable_baselines3 import PPO
 
 # Set initial condition function here
 def getInitialCondition(X):
-    u = np.random.uniform(-5, 5) * np.ones_like(X) 
+    u = np.random.uniform(-5, 5) * np.ones_like(X)
     v = np.random.uniform(-5, 5) * np.ones_like(X) 
     p = np.random.uniform(-5, 5) * np.ones_like(X) 
     return u, v, p
@@ -61,6 +61,6 @@ checkpoint_callback = CheckpointCallback(
   save_vecnormalize=True,
 )
 
-model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="./tb/")
+model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="./tb/", device="cpu")
 # Train for 1 Million timesteps
 model.learn(total_timesteps=2e5, callback=checkpoint_callback)

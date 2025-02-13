@@ -1,0 +1,162 @@
+import gymnasium as gym
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+from stable_baselines3 import PPO, SAC
+from pde_control_gym.src import TunedReward1D
+import pde_control_gym
+from utils import set_size, linestyle_tuple, load_csv
+
+# NO NOISE
+def noiseFunc(state):
+    return state
+
+# Chebyshev Polynomial Beta Functions
+def solveBetaFunction(x, gamma):
+    beta = np.zeros(len(x), dtype=np.float32)
+    for idx, val in enumerate(x):
+        beta[idx] = 5 * math.cos(gamma * math.acos(val))
+    return beta
+
+# Kernel function solver for backstepping
+def solveKernelFunction(theta):
+    kappa = np.zeros(len(theta))
+    for i in range(0, len(theta)):
+        kernelIntegral = 0
+        for j in range(0, i):
+            kernelIntegral += (kappa[i - j] * theta[j]) * dx
+        kappa[i] = kernelIntegral - theta[i]
+    return np.flip(kappa)
+# Control convolution solver
+def solveControl(kernel, u):
+    res = 0
+    for i in range(len(u)-1):
+        res += kernel[i]*u[i]
+    return res*1e-2
+
+# Set initial condition function here
+def getInitialCondition(nx):
+    return np.ones(nx) * np.random.uniform(1, 10)
+
+# Returns beta functions passed into PDE environment
+def getBetaFunction(nx):
+    return solveBetaFunction(np.linspace(0, 1, nx), 7.35)
+
+# Timestep and spatial step for PDE Solver
+T = 5
+dt = 1e-4
+dx = 1e-2
+X = 1
+
+# Hyperbolic parameters
+hyperbolicParameters = {
+    "T": T,
+    "dt": dt,
+    "X": X,
+    "dx": dx,
+    "reward_class": TunedReward1D(int(round(T/dt)), -1e3, 3e2),
+    "normalize": None,
+    "sensing_loc": "full",
+    "control_type": "Dirchilet",
+    "sensing_type": None,
+    "sensing_noise_func": lambda state: state,
+    "limit_pde_state_size": True,
+    "max_state_value": 1e10,
+    "max_control_value": 20,
+    "reset_init_condition_func": getInitialCondition,
+    "reset_recirculation_func": getBetaFunction,
+    "control_sample_rate": 0.1,
+}
+
+# Define Controllers
+def bcksController(obs, beta):
+    kernel = solveKernelFunction(beta)
+    return solveControl(kernel, obs)
+
+def runSingleEpisode(env, boundary_inputs):
+    terminate = False
+    truncate = False
+    uStorage = []
+
+    # Reset Environment
+    obs, _ = env.reset()
+    uStorage.append(obs)
+
+    i = 0
+    rew = 0
+    while not truncate and not terminate and i < len(boundary_inputs):
+        action = boundary_inputs[i]
+        print(action)
+        obs, rewards, terminate, truncate, info = env.step(action)
+        uStorage.append(obs)
+        rew += rewards
+        i += 1
+
+    u = np.array(uStorage)
+    print("Total Reward", rew)
+    return rew, u
+
+# Initialize environment
+env = gym.make("PDEControlGym-TransportPDE1D", **hyperbolicParameters)
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Parameters for the sine wave
+frequency = 1  
+amplitude = 10 
+T = 5  
+num_time_steps = 51 
+interval = T / (num_time_steps - 1)  
+
+# Generate the sine wave to be used as boundary input
+time_points = np.linspace(0, T, num_time_steps)
+#actions = amplitude * np.sin(2 * np.pi * frequency * time_points)
+
+# For backstepping controller
+spatial = np.linspace(dx, X, int(round(X/dx)))
+beta = solveBetaFunction(spatial, 7.35)
+
+file_path = "backstepping_actions.txt"
+with open(file_path, "r") as file:
+    actions = eval(file.read())
+actions = np.array(actions)
+
+# Run the simulation with the input
+reward, u = runSingleEpisode(env, actions)
+
+# Plot the solution
+res = 1
+fig = plt.figure()
+spatial = np.linspace(dx, X, int(round(X/dx)))
+temporal = np.linspace(0, T, len(u))
+u = np.array(u)
+
+subfigs = fig.subfigures(nrows=1, ncols=1, hspace=0)
+
+subfig = subfigs
+subfig.subplots_adjust(left=0.07, bottom=0, right=1, top=1.1)
+axes = subfig.subplots(nrows=1, ncols=1, subplot_kw={"projection": "3d", "computed_zorder": False})
+
+for axis in [axes.xaxis, axes.yaxis, axes.zaxis]:
+    axis._axinfo['axisline']['linewidth'] = 1
+    axis._axinfo['axisline']['color'] = "b"
+    axis._axinfo['grid']['linewidth'] = 0.2
+    axis._axinfo['grid']['linestyle'] = "--"
+    axis._axinfo['grid']['color'] = "#d1d1d1"
+    axis.set_pane_color((1,1,1))
+    
+meshx, mesht = np.meshgrid(spatial, temporal)
+# Ensure u has the same shape as meshx and mesht
+if u.shape != meshx.shape:
+    u = u[:, :meshx.shape[1]]                    
+axes.plot_surface(meshx, mesht, u, edgecolor="black",lw=0.2, rstride=50, cstride=1, 
+                        alpha=1, color="white", shade=False, rasterized=True, antialiased=True)
+axes.view_init(10, 15)
+axes.set_xlabel("x")
+axes.set_ylabel("Time")
+axes.set_zlabel(r"$u(x, t)$", rotation=90)
+axes.zaxis.set_rotate_label(False)
+axes.set_xticks([0, 0.5, 1])
+
+plt.savefig("bckstep.png", dpi=300)

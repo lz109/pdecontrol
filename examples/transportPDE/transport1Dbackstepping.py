@@ -31,7 +31,7 @@ def solveKernelFunction(theta):
 # Control convolution solver
 def solveControl(kernel, u):
     res = 0
-    for i in range(len(u)):
+    for i in range(len(u)-1):
         res += kernel[i]*u[i]
     return res*1e-2
 
@@ -80,7 +80,7 @@ x = np.linspace(0, 1, nt)
 
 # Holds the resulting states
 uStorage = []
-
+actions = []
 # Reset Environment
 obs,__ = env.reset()
 uStorage.append(obs)
@@ -92,11 +92,17 @@ rew = 0
 while not truncate and not terminate:
     # use backstepping controller
     action = solveControl(kernel, obs)
+    actions.append(action)
+    print(action)
     obs, rewards, terminate, truncate, info = env.step(action)
     uStorage.append(obs)
     rew += rewards 
 u = np.array(uStorage)
 print("Total Reward", rew)
+
+file_path = "backstepping_actions.txt"
+with open(file_path, "w") as file:
+    file.write(str(actions))
 
 # Plot the example
 res = 1
@@ -120,7 +126,9 @@ for axis in [axes.xaxis, axes.yaxis, axes.zaxis]:
     axis.set_pane_color((1,1,1))
     
 meshx, mesht = np.meshgrid(spatial, temporal)
-                     
+# Ensure u has the same shape as meshx and mesht
+if u.shape != meshx.shape:
+    u = u[:, :meshx.shape[1]]  #                      
 axes.plot_surface(meshx, mesht, u, edgecolor="black",lw=0.2, rstride=50, cstride=1, 
                         alpha=1, color="white", shade=False, rasterized=True, antialiased=True)
 axes.view_init(10, 15)
@@ -129,4 +137,4 @@ axes.set_ylabel("Time")
 axes.set_zlabel(r"$u(x, t)$", rotation=90)
 axes.zaxis.set_rotate_label(False)
 axes.set_xticks([0, 0.5, 1])
-plt.show()
+plt.savefig("bck.png")
